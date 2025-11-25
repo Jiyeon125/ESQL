@@ -28,7 +28,7 @@ def get_db():
         return None
 
 
-# 사용자자 등록
+# 사용자 등록
 def register_member():
     db = get_db()
     cursor = db.cursor()
@@ -349,12 +349,29 @@ def login():
 def main():
     print("\n---- 비품 대여 시스템 (HLL: Python) ----\n")
 
-    user = login()
-    if not user:
-        return
+    # 첫 화면: 회원가입/로그인 선택
+    user = None
+    while not user:
+        print("\n===== 시작 메뉴 =====")
+        print("1. 회원가입")
+        print("2. 로그인")
+        print("3. 종료")
+        
+        choice = input("\n선택: ").strip()
+        
+        if choice == "1":
+            register_member()
+        elif choice == "2":
+            user = login()
+        elif choice == "3":
+            print("프로그램을 종료합니다.")
+            return
+        else:
+            print("잘못된 선택입니다. 1, 2, 3 중 선택해주세요.\n")
     
     user_id = user['member_id']
 
+    # 로그인 후 메인 메뉴
     while True:
         print("\n===== 메뉴 =====")
         print("1. 비품 대여")
