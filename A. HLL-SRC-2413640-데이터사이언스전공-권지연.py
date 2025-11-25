@@ -4,6 +4,7 @@ import warnings
 import hashlib
 warnings.filterwarnings('ignore')
 
+ADMIN_SECRET = "*smwu*"  # 관리자 인증 코드
 
 # 비밀번호 해시 함수
 def hash_password(raw_password: str) -> str:
@@ -27,32 +28,56 @@ def get_db():
         return None
 
 
-# (1) 회원 등록
+# 사용자자 등록
 def register_member():
     db = get_db()
     cursor = db.cursor()
 
-    print("\n[회원 등록]")
+    print("\n--- 회원 등록 ---")
+
     student_no = input("학번 : ")
     name = input("이름 : ")
     phone = input("전화번호 : ")
-    password_hash = input("비밀번호 해시 : ")
-    bank_account = input("계좌번호 : ")
+    raw_pw = input("비밀번호 : ")
+    pw_hash = hash_password(raw_pw)
+    bank_account = input("환급 계좌번호 : ")
+
+    # 관리자 여부 확인
+    is_admin = 0
+    while True:
+        admin_yn = input("관리자 계정입니까? (Y/N) : ").strip().upper()
+
+        if admin_yn == "Y":
+            code = input("관리자 인증코드 입력 : ")
+            if code == ADMIN_SECRET:
+                print("[관리자 권한 승인됨]")
+                is_admin = 1
+                break
+            else:
+                print("관리자 코드가 일치하지 않습니다.")
+                retry = input("일반 회원으로 등록하시겠습니까? (Y/N) : ").upper()
+                if retry == "Y":
+                    is_admin = 0
+                    break
+
+        elif admin_yn == "N":
+            is_admin = 0
+            break
+
+        else:
+            print("Y 또는 N으로 입력해주세요.")
 
     sql = """
         INSERT INTO member(student_no, name, phone, password_hash, bank_account, is_admin)
-        VALUES (%s, %s, %s, %s, %s, 0)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """
-    try:
-        cursor.execute(sql, (student_no, name, phone, password_hash, bank_account))
-        print("[회원 등록 성공]\n")
-    except Error as e:
-        print("[SQL 오류]", e)
-    finally:
-        db.close()
+    cursor.execute(sql, (student_no, name, phone, pw_hash, bank_account, is_admin))
+
+    print("\n[회원 등록 완료]\n")
+    db.close()
 
 
-# (2) 비품 등록
+# 비품 등록
 def register_item():
     db = get_db()
     cursor = db.cursor()
@@ -75,7 +100,7 @@ def register_item():
         db.close()
 
 
-# (3) 비품 대여
+# 비품 대여
 def rent_item():
     db = get_db()
     cursor = db.cursor()
@@ -107,13 +132,13 @@ def rent_item():
         db.close()
 
 
-# (4) 비품 반납
+# 비품 반납
 def return_item():
     db = get_db()
     cursor = db.cursor()
 
     print("\n[비품 반납]")
-    rental_id = input("반납할 rental_id: ")
+    rental_id = input("반납할 rental_id : ")
 
     try:
         # rental 테이블 returned_on 갱신
@@ -141,22 +166,59 @@ def return_item():
         db.close()
 
 
-# (5) 전체 대여 내역 조회 (JOIN)
-def rental_list():
+# 일반 사용자용 rental_list() — "내 대여 내역 조회"
+def rental_list(user_id):
     db = get_db()
     cursor = db.cursor()
 
-    print("\n[전체 대여 내역 조회]")
+    print("\n[내 대여 내역 조회]")
 
     sql = """
         SELECT r.rental_id,
-               m.name AS member_name,
-               m.student_no,
-               i.category,
-               i.serial_no,
-               r.rented_on,
-               r.due_on,
-               r.returned_on
+            i.category,
+            i.serial_no,
+            i.status,
+            r.rented_on,
+            r.due_on,
+            r.returned_on
+        FROM rental r
+        JOIN item i ON r.item_id = i.item_id
+        WHERE r.member_id = %s
+        ORDER BY r.rental_id DESC
+    """
+
+    try:
+        cursor.execute(sql, (user_id,))
+        rows = cursor.fetchall()
+
+        for r in rows:
+            print(r)
+        print()
+
+    except Error as e:
+        print("[조회 오류]", e)
+
+    finally:
+        db.close()
+
+        
+# 관리자용 전체 대여 내역 조회
+def admin_rental_list():
+    db = get_db()
+    cursor = db.cursor()
+
+    print("\n[전체 대여 내역 조회 - 관리자 전용]")
+
+    sql = """
+        SELECT r.rental_id,
+            m.name AS member_name,
+            m.student_no,
+            i.category,
+            i.serial_no,
+            i.status,
+            r.rented_on,
+            r.due_on,
+            r.returned_on
         FROM rental r
         JOIN member m ON r.member_id = m.member_id
         JOIN item i ON r.item_id = i.item_id
@@ -172,22 +234,50 @@ def rental_list():
         print()
 
     except Error as e:
-        print("[조인 조회 오류]", e)
+        print("[관리자 조회 오류]", e)
 
     finally:
         db.close()
 
 
-# (6) 보증금 거래 입력 (deposit_txn)
+# 사용자 목록 조회
+def member_list():
+    db = get_db()
+    cursor = db.cursor()
+
+    print("\n[회원 목록 조회 - 관리자 전용]")
+
+    sql = """
+        SELECT member_id, student_no, name, phone, bank_account, is_admin
+        FROM member
+        ORDER BY member_id DESC
+    """
+
+    try:
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+
+        for r in rows:
+            print(r)
+        print()
+
+    except Error as e:
+        print("[회원 조회 오류]", e)
+
+    finally:
+        db.close()
+
+
+# 보증금 거래 입력
 def insert_deposit_txn():
     db = get_db()
     cursor = db.cursor()
 
     print("\n[보증금 거래 내역 입력]")
-    member = input("member_id: ")
-    item = input("item_id: ")
-    amount = input("거래 금액(+/-): ")
-    reason = input("거래 유형(INIT / DEPOSIT / REFUND): ")
+    member = input("member_id : ")
+    item = input("item_id : ")
+    amount = input("거래 금액(+/-) : ")
+    reason = input("거래 유형(INIT / DEPOSIT / REFUND) : ")
 
     sql = """
         INSERT INTO deposit_txn(member_id, item_id, amount, reason, created_at)
@@ -203,7 +293,7 @@ def insert_deposit_txn():
         db.close()
 
 
-# (7) 보증금 거래 조회
+# 보증금 거래 조회
 def deposit_history():
     db = get_db()
     cursor = db.cursor()
@@ -233,40 +323,80 @@ def deposit_history():
         db.close()
 
 
+# 로그인
+def login():
+    db = get_db()
+    cursor = db.cursor()
+
+    print("\n--- 로그인 ---")
+    student_no = input("학번: ")
+    pw = input("비밀번호: ")
+    pw_hash = hash_password(pw)
+
+    sql = "SELECT * FROM member WHERE student_no=%s AND password_hash=%s"
+    cursor.execute(sql, (student_no, pw_hash))
+    user = cursor.fetchone()
+
+    if not user:
+        print("로그인 실패: 학번 또는 비밀번호가 틀렸습니다.\n")
+        return None
+
+    print(f"\n환영합니다, {user['name']}님!")
+    return user  # is_admin 포함
+
+
 # 메인 메뉴
 def main():
-    while True:
-        print("==== Python - 비품 대여 시스템 ====")
-        print("1. 회원 등록")
-        print("2. 비품 등록")
-        print("3. 비품 대여")
-        print("4. 비품 반납")
-        print("5. 대여 내역 조회 (JOIN)")
-        print("6. 보증금 거래 입력")
-        print("7. 보증금 거래 조회")
-        print("8. 종료\n")
+    print("\n---- 비품 대여 시스템 (HLL: Python) ----\n")
 
-        cmd = input("번호 선택: ")
+    user = login()
+    if not user:
+        return
+    
+    user_id = user['member_id']
+
+    while True:
+        print("\n===== 메뉴 =====")
+        print("1. 비품 대여")
+        print("2. 비품 반납")
+        print("3. 내 대여 내역 조회 (조인)")
+
+        if user['is_admin']:   # 관리자 전용
+            print("\n--- 관리자 기능 ---")
+            print("A1. 비품 등록")
+            print("A2. 전체 대여 내역 조회(관리자)")
+            print("A3. 사용자 목록 조회")
+            print("A4. 보증금 거래 입력")
+            print("A5. 보증금 거래 조회")
+
+        print("0. 종료")
+
+        cmd = input("번호 선택: ").strip().upper()
 
         if cmd == "1":
-            register_member()
-        elif cmd == "2":
-            register_item()
-        elif cmd == "3":
             rent_item()
-        elif cmd == "4":
+        elif cmd == "2":
             return_item()
-        elif cmd == "5":
-            rental_list()
-        elif cmd == "6":
+        elif cmd == "3":
+            rental_list(user_id)
+
+        # --- 관리자 전용 메뉴 ---
+        elif cmd == "A1" and user['is_admin']:
+            register_item()
+        elif cmd == "A2" and user['is_admin']:
+            admin_rental_list()
+        elif cmd == "A3" and user['is_admin']:
+            member_list()
+        elif cmd == "A4" and user['is_admin']:
             insert_deposit_txn()
-        elif cmd == "7":
+        elif cmd == "A5" and user['is_admin']:
             deposit_history()
-        elif cmd == "8":
-            print("프로그램 종료")
+
+        elif cmd == "0":
+            print("프로그램을 종료합니다.")
             break
         else:
-            print("잘못된 번호입니다.\n")
+            print("잘못된 번호 또는 권한이 없습니다.\n")
 
 
 main()
