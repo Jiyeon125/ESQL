@@ -141,7 +141,7 @@ def register_item():
     # 중복 확인
     cursor.execute("SELECT serial_no FROM item WHERE serial_no=%s", (serial_no,))
     if cursor.fetchone():
-        print("⚠ 이미 등록된 고유번호입니다.\n")
+        print("이미 등록된 고유번호입니다.\n")
         db.close()
         return
     
@@ -555,7 +555,7 @@ def admin_rental_list():
         db.close()
 
 
-# 사용자 목록 조회
+# 회원 목록 조회
 def member_list():
     db = get_db()
     cursor = db.cursor()
